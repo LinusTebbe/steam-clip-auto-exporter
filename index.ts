@@ -19,7 +19,7 @@ if (!await fileExists(configPath)) {
 
 const config = await readAndValidateConfig();
 
-const clipNameRegex = /bg_\d+_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/;
+const clipNameRegex = /clip_\d+_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/;
 const clipDestinationPattern = "$1-$2-$3 $4-$5-$6";
 
 const appIds = await fetch(
@@ -50,7 +50,7 @@ for (const userPath of Deno.readDirSync(userDataPath)) {
       const inputDirectory = path.join(videoPath, clipPath.name);
 
       const appName = appIds[clipPath.name.split("_")[1]];
-      const outputFileName = clipPath.name.replace(
+      const outputFileName = clipWrapperPath.name.replace(
         clipNameRegex,
         `${appName} ${clipDestinationPattern}.mp4`,
       );
