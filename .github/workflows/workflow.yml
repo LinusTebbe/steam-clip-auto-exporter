@@ -1,0 +1,37 @@
+name: Compile and upload
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Verify formatting
+        run: deno fmt --check
+
+      - name: Run linter
+        run: deno lint
+
+      - name: Compile for Linux
+        run: deno compile --allow-all -o steam-clip-auto-exporter index.ts
+
+      - name: Compile for Windows
+        run: deno compile --allow-all -o steam-clip-auto-exporter.exe --target x86_64-pc-windows-msvc index.ts
+
+      - name: Upload binaries
+        run: gh release upload ${{github.event.release.tag_name}} steam-clip-auto-exporter steam-clip-auto-exporter.exe
+        env:
+          GITHUB_TOKEN: ${{ github.TOKEN }}

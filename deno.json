@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "@ffmpeg/ffmpeg": "npm:@ffmpeg/ffmpeg@^0.12.15",
+    "@libs/xml": "jsr:@libs/xml@^7.0.2",
+    "@std/path": "jsr:@std/path@^1.1.2"
+  }
+}
