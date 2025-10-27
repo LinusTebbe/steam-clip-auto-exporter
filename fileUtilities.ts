@@ -1,10 +1,9 @@
 import * as path from "@std/path";
-import { ConfigFile, MpdFile } from "./interfaces.ts";
+import { MpdFile } from "./interfaces.ts";
 import { parse, stringify } from "@libs/xml";
 
-export const configPath = path.join("./", "config.json");
-
-export async function fileExists(path: string): Promise<boolean> {
+export async function fileExists(path: string | null): Promise<boolean> {
+  if (path === null) return false;
   try {
     await Deno.lstat(path);
     return true;
@@ -27,33 +26,4 @@ export async function writeCorrectedMpdFile(
   dom.MPD.Period["@start"] = "PT0.0S";
   await Deno.writeTextFile(targetPath, stringify(dom));
   return targetPath;
-}
-
-export async function writeDefaultConfig(): Promise<void> {
-  await Deno.writeTextFile(
-    configPath,
-    JSON.stringify(
-      {
-        "steamInstallPath": "C:\\Program Files (x86)\\Steam",
-        "outputPath": "C:\\Users\\YOUR_USER\\Videos",
-      },
-      null,
-      2,
-    ),
-  );
-}
-
-export async function readAndValidateConfig(): Promise<ConfigFile> {
-  const config = JSON.parse(Deno.readTextFileSync(configPath)) as ConfigFile;
-
-  if (!await fileExists(config.steamInstallPath)) {
-    console.error("Steam installation path does not exist");
-    Deno.exit(1);
-  }
-  if (!await fileExists(config.outputPath)) {
-    console.error("Output path does not exist");
-    Deno.exit(1);
-  }
-
-  return config;
 }

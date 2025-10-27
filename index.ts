@@ -1,71 +1,68 @@
+import SysTray, { ClickEvent } from "systray";
 import * as path from "@std/path";
-import { exec } from "node:child_process";
+import { exportAll, exportSingleEntry } from "./exporter.ts";
+import config from "./config.ts";
+let watcher: Deno.FsWatcher | null = null;
+const ItemRunNow = {
+  title: "Run now",
+  enabled: true,
+  tooltip: "Run now",
+};
+const ItemExit = {
+  title: "Exit",
+  checked: false,
+  enabled: true,
+  tooltip: "Exit",
+};
 
-import {
-  configPath,
-  fileExists,
-  readAndValidateConfig,
-  writeCorrectedMpdFile,
-  writeDefaultConfig,
-} from "./fileUtilities.ts";
+const systray = new SysTray({
+  menu: {
+    tooltip: "Steam Clip Auto Exporter",
+    icon: Deno.build.os === "windows" ? "./icon.ico" : "./icon.png",
+    isTemplateIcon: Deno.build.os === "darwin",
+    title: "Steam Clip Auto Exporter",
+    items: [
+      ItemRunNow,
+      SysTray.separator,
+      ItemExit,
+    ],
+  },
+  debug: true,
+  directory: "bin",
+});
 
-if (!await fileExists(configPath)) {
-  await writeDefaultConfig();
-  console.error(
-    "Created config.json with default values. Please edit it to your needs!",
-  );
-  Deno.exit(1);
-}
+systray.on("click", (action: ClickEvent) => {
+  switch (action.item.title) {
+    case "Run now":
+      exportAll();
+      break;
+    case "Exit":
+      systray.kill();
+      break;
+  }
+});
 
-const config = await readAndValidateConfig();
-
-const clipNameRegex = /clip_\d+_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/;
-const clipDestinationPattern = "$1-$2-$3 $4-$5-$6";
-
-const appIds = await fetch(
-  "https://api.steampowered.com/ISteamApps/GetAppList/v2",
-)
-  .then((res) => res.json())
-  .then((res) =>
-    Object.fromEntries(
-      res.applist.apps.map((
-        app: { appid: number; name: string },
-      ) => [app.appid, app.name]),
-    )
-  );
-
-const userDataPath = path.join(config.steamInstallPath, "userdata");
-
-for (const userPath of Deno.readDirSync(userDataPath)) {
-  if (!userPath.isDirectory) continue;
-  const clipsPath = path.join(
-    userDataPath,
-    userPath.name,
-    "gamerecordings",
-    "clips",
-  );
-  for (const clipWrapperPath of Deno.readDirSync(clipsPath)) {
-    const videoPath = path.join(clipsPath, clipWrapperPath.name, "video");
-    for (const clipPath of Deno.readDirSync(videoPath)) {
-      const inputDirectory = path.join(videoPath, clipPath.name);
-
-      const appName = appIds[clipPath.name.split("_")[1]];
-      const outputFileName = clipWrapperPath.name.replace(
-        clipNameRegex,
-        `${appName} ${clipDestinationPattern}.mp4`,
-      );
-      const outputFile = path.join(config.outputPath, outputFileName);
-      if (await fileExists(outputFile)) {
-        console.log(`Skipping ${inputDirectory}. Already exported`);
-        continue;
-      }
-      const inputFile = await writeCorrectedMpdFile(inputDirectory);
-
-      console.log(`Exporting ${inputDirectory} to ${outputFile}`);
-
-      await exec(
-        `ffmpeg -i "${inputFile}" -c copy "${outputFile}"`,
-      );
+systray.on("ready", async () => {
+  await exportAll();
+  watcher = Deno.watchFs(config.clipPaths);
+  for await (const event of watcher) {
+    if (event.kind !== "create") continue;
+    for (const clipPath of event.paths) {
+      const pathParts = clipPath.split(path.SEPARATOR);
+      const clipName = pathParts.pop() ?? "";
+      const basePath = path.join("", ...pathParts);
+      if (!clipName.startsWith("clip_")) continue;
+      setTimeout(() => exportSingleEntry(basePath, clipName), 10_000);
     }
   }
-}
+});
+
+systray.on("exit", () => {
+  console.log("exited");
+  watcher?.close();
+  Deno.exit(0);
+});
+
+systray.on("error", (error) => {
+  console.log(error);
+});
